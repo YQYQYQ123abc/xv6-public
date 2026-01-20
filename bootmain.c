@@ -22,29 +22,43 @@ bootmain(void)
   void (*entry)(void);
   uchar* pa;
 
-  elf = (struct elfhdr*)0x10000;  // scratch space
+  // 临时缓冲区，用于存放 ELF 头
+  elf = (struct elfhdr*)0x10000;
 
-  // Read 1st page off disk
+  // ----------------------------
+  // 1. 进入 bootmain
+  // ----------------------------
+  cprintf("[BOOT] enter bootmain\n"); // 输出调试信息，标记进入 bootmain 阶段
+
+  // 从磁盘读取内核的第 1 页（4 KB）
   readseg((uchar*)elf, 4096, 0);
 
-  // Is this an ELF executable?
+  // ----------------------------
+  // 2. ELF 文件合法性检查
+  // ----------------------------
   if(elf->magic != ELF_MAGIC)
-    return;  // let bootasm.S handle error
+    return;  // ELF 魔数不对，交由 bootasm.S 处理错误
 
-  // Load each program segment (ignores ph flags).
+  cprintf("[BOOT] elf header loaded\n"); // ELF 文件头读取完成
+
+  // 逐段加载内核（忽略段的标志）
   ph = (struct proghdr*)((uchar*)elf + elf->phoff);
   eph = ph + elf->phnum;
   for(; ph < eph; ph++){
-    pa = (uchar*)ph->paddr;
-    readseg(pa, ph->filesz, ph->off);
-    if(ph->memsz > ph->filesz)
+    pa = (uchar*)ph->paddr;         // 获取物理加载地址
+    readseg(pa, ph->filesz, ph->off); // 从磁盘读取该段内容到物理地址
+    if(ph->memsz > ph->filesz)      // 如果内存大小大于文件大小，用 0 填充剩余空间
       stosb(pa + ph->filesz, 0, ph->memsz - ph->filesz);
   }
 
-  // Call the entry point from the ELF header.
-  // Does not return!
+  // ----------------------------
+  // 3. 内核段加载完成
+  // ----------------------------
+  cprintf("[BOOT] kernel loaded\n"); // 所有内核段已加载完毕
+
+  // 调用 ELF 入口地址，跳转进入内核
   entry = (void(*)(void))(elf->entry);
-  entry();
+  entry(); // 不会返回
 }
 
 void
