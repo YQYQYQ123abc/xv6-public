@@ -1,51 +1,18 @@
-NOTE: we have stopped maintaining the x86 version of xv6, and switched
-our efforts to the RISC-V version
-(https://github.com/mit-pdos/xv6-riscv.git)
+# xv6 启动链路实践
+1.启动流程说明
 
-xv6 is a re-implementation of Dennis Ritchie's and Ken Thompson's Unix
-Version 6 (v6).  xv6 loosely follows the structure and style of v6,
-but is implemented for a modern x86-based multiprocessor using ANSI C.
+本次实践基于 MIT xv6 的 x86 版本，主要目标是理解操作系统从 bootloader 到内核 main 函数的完整启动过程。启动过程从 bootasm.S 开始，BIOS 会把 bootblock 加载到物理地址 0x7c00 并开始执行。在这个阶段，程序会先设置段寄存器 DS、ES 和 SS，开启 A20 地址线，并切换到 32 位保护模式，同时初始化 GDT，最后调用 bootmain 函数进入 C 语言代码执行阶段。
 
-ACKNOWLEDGMENTS
+在 bootmain.c 中，程序首先打印 “[BOOT] enter bootmain” 来标记进入 bootmain 函数，然后读取内核 ELF 文件的第一页数据，并验证 ELF 魔数是否正确，验证通过后打印 “[BOOT] elf header loaded”。随后程序会遍历 ELF 文件中的每个程序段，将其加载到对应的物理内存中，加载完成后打印 “[BOOT] kernel loaded”，最后跳转到 ELF 的入口地址。
 
-xv6 is inspired by John Lions's Commentary on UNIX 6th Edition (Peer
-to Peer Communications; ISBN: 1-57398-013-7; 1st edition (June 14,
-2000)). See also https://pdos.csail.mit.edu/6.828/, which
-provides pointers to on-line resources for v6.
+进入 entry.S 后，CPU 会进行分页设置，包括开启 4MB 页扩展、加载页目录和开启分页功能，同时设置内核栈，最后跳转到 main 函数。在 main.c 中，内核完成了物理页分配器初始化、页表初始化、多核 CPU 的检测和启动、设备初始化以及内核数据结构的设置。此时，程序打印 “[KERNEL] main() started”，标志着内核 C 语言部分正式开始执行。之后内核会启动第一个用户进程，并进入调度器，CPU 开始执行进程调度。
 
-xv6 borrows code from the following sources:
-    JOS (asm.h, elf.h, mmu.h, bootasm.S, ide.c, console.c, and others)
-    Plan 9 (entryother.S, mp.h, mp.c, lapic.c)
-    FreeBSD (ioapic.c)
-    NetBSD (console.c)
+通过这样的步骤，可以清晰地看到从 bootloader 到内核 main 的启动链路，汇编与 C 代码在启动阶段的协作方式，以及 ELF 内核镜像加载和页表初始化的流程。
 
-The following people have made contributions: Russ Cox (context switching,
-locking), Cliff Frey (MP), Xiao Yu (MP), Nickolai Zeldovich, and Austin
-Clements.
+2.运行结果
 
-We are also grateful for the bug reports and patches contributed by Silas
-Boyd-Wickizer, Anton Burtsev, Cody Cutler, Mike CAT, Tej Chajed, eyalz800,
-Nelson Elhage, Saar Ettinger, Alice Ferrazzi, Nathaniel Filardo, Peter
-Froehlich, Yakir Goaron,Shivam Handa, Bryan Henry, Jim Huang, Alexander
-Kapshuk, Anders Kaseorg, kehao95, Wolfgang Keller, Eddie Kohler, Austin
-Liew, Imbar Marinescu, Yandong Mao, Matan Shabtay, Hitoshi Mitake, Carmi
-Merimovich, Mark Morrissey, mtasm, Joel Nider, Greg Price, Ayan Shafqat,
-Eldar Sehayek, Yongming Shen, Cam Tenny, tyfkda, Rafael Ubal, Warren
-Toomey, Stephen Tu, Pablo Ventura, Xi Wang, Keiichi Watanabe, Nicolas
-Wolovick, wxdao, Grant Wu, Jindong Zhang, Icenowy Zheng, and Zou Chang Wei.
+在 QEMU 模拟器中启动 xv6 后，可以看到完整的启动打印信息。首先会打印 bootmain 阶段的消息，包括 “[BOOT] enter bootmain”、“[BOOT] elf header loaded” 和 “[BOOT] kernel loaded”，紧接着进入内核后打印 “[KERNEL] main() started”，随后各个 CPU 启动信息也会显示出来，例如 “cpu0: starting 0”、“cpu1: starting 1”等等。通过这些信息，可以直观地了解系统启动的顺序以及每个阶段的执行情况。
 
-The code in the files that constitute xv6 is
-Copyright 2006-2018 Frans Kaashoek, Robert Morris, and Russ Cox.
+3.个人总结
 
-ERROR REPORTS
-
-We don't process error reports (see note on top of this file).
-
-BUILDING AND RUNNING XV6
-
-To build xv6 on an x86 ELF machine (like Linux or FreeBSD), run
-"make". On non-x86 or non-ELF machines (like OS X, even on x86), you
-will need to install a cross-compiler gcc suite capable of producing
-x86 ELF binaries (see https://pdos.csail.mit.edu/6.828/).
-Then run "make TOOLPREFIX=i386-jos-elf-". Now install the QEMU PC
-simulator and run "make qemu".
+通过本次实践，我对 xv6 的启动链路有了系统的理解，从 bootloader、汇编代码到内核 C 代码的执行顺序都非常清晰。实验中加入启动打印信息，让我能够直观地看到每一步的执行效果，加深了对内核镜像加载、页表初始化和多核 CPU 启动机制的理解。在这个过程中，我也练习了如何在汇编和 C 代码中安全地添加调试输出，并熟悉了 Git 的 fork、commit 和 push 流程，为后续进行操作系统实验和内核开发打下了基础。整个实践不仅提升了对操作系统底层原理的理解，也增强了动手能力和调试思维。
